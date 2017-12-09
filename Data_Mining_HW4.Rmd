@@ -1,0 +1,244 @@
+---
+title: "Homework 4"
+author: "Idris Rasheed and Faraz Farooq, Spring 2017"
+date: "__Due on May 31, 2017 at 11:59 pm__"
+graphics: yes
+geometry: margin=0.75in
+output: pdf_document
+---
+
+```{r setup, include = FALSE}
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(ROCR)
+library(NbClust)
+library(cluster)
+
+knitr::opts_chunk$set(echo=TRUE, cache=TRUE, 
+                      fig.width=6, fig.height=5,
+                      fig.align='center')
+
+## indents are for indenting r code as formatted text
+## They may need to be adjusted depending on your OS
+indent1 = '    '
+indent2 = '        '
+indent3 = '            '
+runsoln = TRUE
+library(class)
+library(pander)
+```
+
+```{r out.width='50%', indent=indent1}
+dat = read.table('nonlinear.csv') %>% mutate(Y=as.factor(Y))
+ggplot(dat, aes(x=X1, y=X2)) + 
+    geom_point(aes(color=Y), size=3) + 
+    xlim(-5,5) + ylim(-5,5)
+```
+    
+    
+###1a)
+
+```{r}
+nonlinglm.fit <- glm(Y ~ X1 + X2, family= binomial, data= dat)
+nonlinglm.fit
+
+nonlin.training <- predict(nonlinglm.fit, type = "response")
+round(nonlin.training, digits = 2)
+#Fitting to a model to plot ROC Curve
+pred.nonlin <- prediction(nonlin.training, dat$Y)
+perf.nonlin <- performance(pred.nonlin, measure="tpr", x.measure="fpr")
+plot(perf.nonlin, col=2, lwd=3, main="ROC curve")
+abline(0,1)
+# FPR
+fpr = performance(pred.nonlin, "fpr")@y.values[[1]]
+cutoff = performance(pred.nonlin, "fpr")@x.values[[1]]
+# FNR
+fnr = performance(pred.nonlin,"fnr")@y.values[[1]]
+rate = as.data.frame(cbind(Cutoff=cutoff, FPR=fpr, FNR=fnr))
+rate$distance = sqrt((rate[,2])^2+(rate[,3])^2)
+index = which.min(rate$distance)
+best = rate$Cutoff[index]
+best
+
+```
+
+Our pthresh is .6823254
+
+###1b)
+
+```{r, out.width='50%', indent=indent2}
+# grid of points over sample space
+gr = expand.grid(X1=seq(-5, 5, by=0.1),  # sample points in X1
+                 X2=seq(-5, 5, by=0.1))  # sample points in X2
+```
+    
+```{r}
+predclass1 <- predict(nonlinglm.fit, gr)
+class1 <- predclass1[which(predclass1 < best)]
+class2 <- predclass1[which(predclass1 >= best)] 
+
+grr <- gr
+grr$Y <- predclass1
+ggplot(grr, aes(x=X1, y=X2)) + 
+    geom_point(aes(color=Y), size=3) + 
+    xlim(-5,5) + ylim(-5,5)
+
+```
+
+###1c)
+
+```{r}
+polylinglm.fit <- glm(Y ~ poly(X1,2) + poly(X2,2) + X1:X2, family= binomial,data = dat)
+summary(polylinglm.fit)
+
+polylin.training <- predict(polylinglm.fit, type = "response")
+round(polylin.training, digits = 2)
+#Fitting to a model to plot ROC Curve
+pred.polylin <- prediction(polylin.training, dat$Y)
+perf.polylin <- performance(pred.polylin, measure="tpr", x.measure="fpr")
+plot(perf.polylin, col=2, lwd=3, main="ROC curve")
+abline(0,1)
+# FPR
+fpr = performance(pred.polylin, "fpr")@y.values[[1]]
+cutoff = performance(pred.polylin, "fpr")@x.values[[1]]
+# FNR
+fnr = performance(pred.polylin,"fnr")@y.values[[1]]
+rate = as.data.frame(cbind(Cutoff=cutoff, FPR=fpr, FNR=fnr))
+rate$distance = sqrt((rate[,2])^2+(rate[,3])^2)
+index = which.min(rate$distance)
+best1 = rate$Cutoff[index]
+best1 #.728744
+ 
+predclass2 <- predict(polylinglm.fit, gr)
+class11 <- predclass2[which(predclass2 < best1)]
+class22 <- predclass2[which(predclass2 >= best1)] 
+grr2 <- gr
+grr2$Y <- predclass2
+ 
+ggplot(grr2, aes(x=X1, y=X2)) + 
+    geom_point(aes(color=Y), size=3) + 
+    xlim(-5,5) + ylim(-5,5)
+```
+
+We get the error for the warning because we are overfitting, our threshold went up as well. by that we are modeling a regression with more parameters than observations. We have too many interactions and they are not limited. This is a better model because through decision boundary rules we can fit complex decision boundaries or a simple hypothesis by increasing the order. 
+
+###1d)
+
+```{r}
+polyglm5fit<- glm( Y~ X1 +X2 +X1^2 + X2^2 + X1^3 +X2^3 +X1^4 + X2^4 + X1^5 +X2^5 , family = binomial, data = dat)
+polylin5.training <- predict(polyglm5fit, type = "response")
+round(polylin5.training, digits = 2)
+#Fitting to a model to plot ROC Curve
+pred.polylin5 <- prediction(polylin5.training, dat$Y)
+perf.polylin5 <- performance(pred.polylin5, measure="tpr", x.measure="fpr")
+plot(perf.polylin5, col=2, lwd=3, main="ROC curve")
+abline(0,1)
+# FPR
+fpr = performance(pred.polylin5, "fpr")@y.values[[1]]
+cutoff = performance(pred.polylin5, "fpr")@x.values[[1]]
+# FNR
+fnr = performance(pred.polylin5,"fnr")@y.values[[1]]
+rate = as.data.frame(cbind(Cutoff=cutoff, FPR=fpr, FNR=fnr))
+rate$distance = sqrt((rate[,2])^2+(rate[,3])^2)
+index = which.min(rate$distance)
+best2 = rate$Cutoff[index]
+best2 #.728744
+ 
+predclass3 <- predict(polyglm5fit, gr)
+class111 <- predclass3[which(predclass3 < best2)]
+class222 <- predclass3[which(predclass3 >= best2)] 
+
+predclass3 <- predict(polyglm5fit, gr)
+grr3 <- gr
+grr3$Y <- predclass3
+ 
+ggplot(grr3, aes(x=X1, y=X2)) + 
+    geom_point(aes(color=Y), size=3) + 
+    xlim(-5,5) + ylim(-5,5)
+
+```
+
+This decision boundary seems to be underfitting, however the dark points are not centered in the middle as opposed to the 2nd order one. The line is clearer so I feel this could not fit a complex model as well as the second order or first case. The best approach would be the 2nd order as it could deal with complex models despite overfitting. Also the third one gave a similar pthresh at .683254.
+
+```{r, indent=indent1}
+library(ROCR)
+
+data(Default, package="ISLR")
+str(Default)
+```
+
+
+###2a)
+
+```{r}
+def.glm <- glm(default ~ balance, family = binomial, data =Default)
+pred1 <- predict(def.glm, type = "response")
+#round(pred1, digits = 2)
+pred2 <- prediction(pred1, Default$default)
+TP <- pred2@tp[[1]]
+FP <- pred2@fp[[1]]
+FN <- pred2@fn[[1]]
+f1 <- (2*TP)/((2*TP)+FP +FN)
+TP[c(1,2,3,4,5,6,7,8,9,10)]
+FP[c(1,2,3,4,5,6,7,8,9,10)]
+FN[c(1,2,3,4,5,6,7,8,9,10)]
+f1[c(1,2,3,4,5,6,7,8,9,10)]
+
+```
+
+```{r}
+cutoff <- pred2@cutoffs[[1]]
+plot(cutoff, f1, xlab= "Pthreshold", ylab= "f1", main= "F1 as a function of cutoffs")
+```
+
+```{r}
+index1 = which.max(f1)
+pthresh <- cutoff[index1]
+pthresh
+```
+
+Our pthreshold is .3208755
+
+###2c)
+
+```{r}
+pos <- filter(Default, default == "Yes")
+neg <- filter(Default, default == "No")
+head(pos, n=3)
+head(neg, n=3)
+
+```
+
+```{r}
+set.seed(1)
+neg1 <- neg[sample(nrow(neg), 333), ]
+neg.fit <- glm(default ~ balance, family = binomial, data= neg1)
+summary(neg.fit)
+```
+
+
+###2d)
+
+Using data Default, create a scatter plot showing default as function of balance. Recode variable to replicate right of Figure 4.2: i.e., use 1 for Yes and 0 for No. Also, plot the estimated probabilities of default from using def.glm model, coloring each point by the class label determined by using threshold determined with F1 score. Create an analogous plot using undersampled data and resulting model. Note that threshold here would be 0.5 since we have not determined using F1 score
+
+```{r}
+#Scatter Plot
+plot(Default$balance, Default$default, main = "default vs balance", xlab = "balance", ylab="default")
+```
+
+```{r}
+levels(Default$default)
+levels(Default$default)[1]<-"0"
+levels(Default$default)[2]<-"1"
+Default$default <- factor(Default$default)
+levels(Default$default)
+```
+
+
+###2e)
+
+Depending on the type of problem. In the case of underlying processes, if we have a manufacturer and he would run into problems because the underlying process makes the relationship between all the x's that contribute to a significant improvement in y a lot more complex so the imbalance of the different classes would. He would be better off with trying to find the main few x's that are contributing to y. This method would still be better than him trying to sample. In the case of sampling, we can run into oversampling or undersampling. If he undersamples, he could remove the majority classes which could be important so he could lose out on that information. In this case, he would mess up the decision boundary and cause false positive representation of the class(i.e, a negative classified as a positive). If he oversamples, he would just duplicate too many minority classes, this would cause duplicates and in the decision boundary, since the algorithm would see one instance multiple times. It would end up overfitting. So he is better off with underlying processes as he can focus in on maybe just the few x's that contribute to y without getting rid of or dealing with false positives. 
+
+
+

@@ -1,0 +1,122 @@
+---
+title: "PSTAT 131 HW1"
+author: "Idris Rasheed and Faraz Farooq"
+date: "April 12, 2017"
+output: pdf_document
+---
+###1
+(a) Looking up customers of a company according to their profitability.
+
+No. This is a simple accounting calculation. 
+
+(b) Computing the total sales of a company.
+
+No. We are just calculating a simple value, not extracting any information from total sales.
+
+(c) Predicting the future stock price of a company using historical records.
+
+Yes. A data mining task will involve building a predictive model to forecast the future stock price. 
+
+(d) Sorting a student database based on student identification numbers.
+
+No. This is a database query task. 
+
+(e) Predicting the outcomes of tossing a (fair) pair of dice.
+
+No. This is a probability problem because the pair of dice are fair. If the dice were not fair, then we could use data mining to understand the probability. 
+
+(f) Extracting the frequencies of a sound wave.
+No. This a task pertaining to signal processing.
+
+###Importing Algae Files and libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(alr4)
+library(outliers)
+```
+
+```{r}
+algae <- read.table('algaeBloom.txt',header=F,dec='.', col.names=c('season','size','speed','mxPH','mnO2','Cl','NO3','NH4','oPO4', 'PO4','Chla','a1','a2','a3','a4','a5','a6','a7'), 
+                    na.strings=c('XXXXXXX')) 
+attach(algae) 
+head(algae,3)
+```
+
+###2a)
+```{r}
+library(dplyr)
+algae %>% 
+  group_by(season) %>% 
+summarise(n = n())
+```
+So the number of observations for autumn, spring, summer, winter are 40,53,45, and 62 respectively. 
+
+###2b)
+```{r}
+colMeans(algae[,5:11], na.rm = TRUE)
+var(algae[5], na.rm = TRUE)
+var(algae[6], na.rm =TRUE)
+var(algae[7], na.rm =TRUE)
+var(algae[8], na.rm =TRUE)
+var(algae[9], na.rm =TRUE)
+var(algae[10], na.rm =TRUE)
+var(algae[11], na.rm = TRUE)
+```
+
+There are missing values since we had to put na.rm, because the code would not run without them due to NA's. The mean of mnO2 is bigger than NO3 however the variance of NO3 is larger. This is a puzzling connection.For mnO2 AND NO3 the mean for mnO2 is bigger than NO3 9.11 >3.28 but the variance for NO3 is larger 14.261 > 5.71. The mean's and variance might also be affected by the number of missing observations.
+
+###2c
+```{r}
+#Column Medians
+median(algae$mnO2, na.rm = TRUE)
+median(algae$Cl, na.rm = TRUE)
+median(algae$NO3, na.rm = TRUE)
+median(algae$NH4, na.rm = TRUE)
+median(algae$oPO4, na.rm = TRUE)
+median(algae$PO4, na.rm = TRUE)
+median(algae$Chla, na.rm = TRUE)
+```
+
+```{r}
+#Column Median Absolute Deviation
+mad(algae$mnO2, na.rm = TRUE)
+mad(algae$Cl, na.rm = TRUE)
+mad(algae$NO3, na.rm = TRUE)
+mad(algae$NH4, na.rm = TRUE)
+mad(algae$oPO4, na.rm = TRUE)
+mad(algae$PO4, na.rm = TRUE)
+mad(algae$Chla, na.rm = TRUE)
+```
+The values for the mean and variance seem to be higher than the values of the median and MAD for these chemicals. So based on this the data is very spread out, so it makes it tougher to fit it to a normal distribution. 
+
+###3a-b)
+```{r}
+hist(algae$mxPH, freq = FALSE, main = "Histogram of mxPH", col = "red") # It looks a bit skewed to the right.
+lines(density(na.omit(algae$mxPH)), col="green")
+lines(rug(na.omit(algae$mxPH)))
+
+```
+The distribution is slightly skewed to the right. 
+
+###3c)
+```{r}
+boxplot(algae$a1 ~ algae$size, main = "A conditional BoxPlot of Algae a1")
+```
+
+###3d)
+```{r}
+boxplot(algae$NO3 ~ algae$size, main = "A conditional BoxPlot of Algae NO3")
+boxplot(algae$NH4 ~ algae$size, main = "A conditional BoxPlot of Algae NH4")
+outlierTest(lm(algae$NO3 ~ algae$size))
+outlierTest(lm(algae$NH4 ~algae$size))
+
+```
+There are outlier's for both since we see them in the boxplot, they are 1.5 distance away from the quantiles. However,it is tough to tell how many so we did an outlier test, they both represent outlier's. However, there is only one observation similar to both so we would only consider the 153rd observation as an outlier. 
+
+###3e
+From 2c)
+mean of NO3 was 3.28 and NH4 is 501.3 and variance was 14.26 and 3851585 
+Medians are 2.67 and 103.16 and MAD are 2.17 and 111.675
+
+Outliers are defined as having higher variance from the rest of the data points. The computation of the mean and variance take outliers into account, thus making them sensitive to outliers.  Because of this, the mean and variance have weak resistance to outliers and are not sufficient estimators. On the other hand, MAD and median are better estimators because they are less sensitive to outliers, and MAD is a more robust estimator than the sample variance and mean in the presence of outliers.  This explains why the means and variances of NO3 and NH4 are so different from their respective medians and MADs. The chemicals' means and variances values are affected by outlier, and their medians and MADs are better estimators for these chemicals.
+

@@ -1,0 +1,256 @@
+---
+title: "Homework 2 PSTAT 131"
+author: "Idris Rasheed and Faraz Farooq"
+date: "__Due on April 25th, 2017 at 11:59 pm__"
+graphics: yes
+geometry: margin=0.75in
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, 
+                      cache=TRUE, 
+                      fig.width=5, 
+                      fig.height=5,
+                      fig.align='center')
+indent1 = '    '      
+indent2 = paste(rep(indent1, 2), collapse='')
+solcode = TRUE
+r = function(x, digits=2){ round(x, digits=digits) }
+```
+
+###1. 
+     **Image compression with PCA**
+
+    Bitmap image can be read in via the following command:
+
+```{r readbitmap,indent=indent1}
+#install.packages('bmp')
+library(bmp)
+library(dplyr)
+img = read.bmp('image1.bmp')
+img = t(img[ncol(img):1,])      # fix orientation
+img = img - mean(img)           # subtract overall mean
+```
+
+    Plot the image in grayscale:
+
+```{r plot-bitmap,indent=indent1}
+gs = grey((0:255)/255)
+image(img, asp=1, col=gs, yaxs='r', xaxt='n', yaxt='n')
+```
+
+###1a) 
+```{r}
+??bmp::xaxt
+??bmp::yaxt
+??bmp:image
+```
+
+###1b)
+```{r}
+pca_img <- prcomp(img)
+str(pca_img)
+names(pca_img)
+```
+
+###1c)
+```{r}
+X <- img
+PHI <- pca_img$rotation
+Z <- pca_img$x
+(norm(Z-(X%*%PHI), type = "F"))^2
+#This shoudld be zero but something is not working with our code
+```
+
+###1d)
+```{r}
+Q <- pca_img$rotation
+(norm((t(Q)%*%Q)-diag(512), type = "F"))^2
+```
+
+###1e)
+```{r}
+new_img <- Z[,10:100]%*%t(PHI[,10:100])
+image(new_img, asp=1, col=gs)
+```
+
+###1f)
+```{r}
+percent_var_expl <- pca_img$sdev^2 / sum(pca_img$sdev^2)
+screeplot(pca_img, npcs = 10, type = "lines")
+plot(percent_var_expl)
+cumVar <- cumsum(pca_img$sdev^2 / sum(pca_img$sdev^2))
+plot(cumVar)
+summary(prcomp( .9*(pca_img$sdev^2 / sum(pca_img$sdev^2))))
+
+```
+From the plot's we can tell there are about 18 principal components needed to explain 90% of the variance
+
+###3a)
+```{r}
+algae <- read.table('algaeBloom.txt',header=F,dec='.',
+col.names=c('season','size','speed','mxPH','mnO2','Cl','NO3','NH4','oPO4',
+'PO4','Chla','a1','a2','a3','a4','a5','a6','a7'),
+na.strings=c('XXXXXXX'))
+attach(algae)
+
+sum(is.na(algae))
+
+colSums(is.na(algae))
+
+```
+i)There are 33 total observations that contain missing values
+ii)The only variables that contain missing values are mxPH (1), mn02(2), Cl(10), NO3(2), NH4(2),oPo4(2), Po4(2), Chla(12)
+
+###3b)
+```{r}
+algae.del <- algae%>%filter(complete.cases(.))
+algae.del
+nrow(algae.del)
+```
+There are 184 observations in algae.del
+
+###3c)
+```{r}
+algae.med <- algae %>%mutate_each(funs(ifelse(is.na(.), median(., na.rm=TRUE), .)))
+nrow(algae.med)
+algae.med[c(48,62,199),]
+```
+There are 200 observations
+
+###3d)
+```{r}
+cor(algae.med, use= "complete.obs", method = "pearson")
+
+prediction <- predict(lm(PO4~oPO4, data = algae.med))
+prediction[28]
+
+```
+48.04407 is our value for the 28th observation
+
+
+###4a)
+```{r}
+library(tree)
+library(ISLR)
+set.seed(1)
+dim(algae.med)
+train = sample(1:nrow(algae.med), 0.8*dim(algae.med)[1])
+train
+tree.algae.med = tree(lm(a1~ season + size + speed + mxPH +mnO2 + Cl + NO3 + NH4 +oPO4 + PO4 + Chla), data = algae.med, subset = train)
+#Training error rate
+algae.med.train= algae.med [train,]
+a1.test = algae.med.train$a1
+a1.pred = predict(tree.algae.med, algae.med.train)
+error1 = table(a1.pred, a1.test)
+error1
+sum(diag(error1))/sum(error1)
+1-sum(diag(error1))/sum(error1)
+
+#Test error rate
+algae.med.test = algae.med [-train,]
+algae.med.test
+a12.test = algae.med.test$a1
+a12.pred = predict(tree.algae.med, algae.med.test)
+error12 = table(a12.pred, a12.test)
+error12
+sum(diag(error12))/sum(error12)
+1-sum(diag(error12))/sum(error12)
+
+
+```
+
+The training error rate is 90.625% and the test error rate is 82.5%
+
+###4b)
+```{r}
+set.seed(2)
+dim(algae.med)
+train = sample(1:nrow(algae.med), 0.8*dim(algae.med)[1])
+train
+tree.algae.med = tree(lm(a1~ season + size + speed + mxPH +mnO2 + Cl + NO3 + NH4 +oPO4 + PO4 + Chla), data = algae.med, subset = train)
+#Training error rate
+algae.med.train= algae.med [train,]
+a1.test = algae.med.train$a1
+a1.pred = predict(tree.algae.med, algae.med.train)
+a1.pred
+error1 = table(a1.pred, a1.test)
+error1
+sum(diag(error1))/sum(error1)
+1-sum(diag(error1))/sum(error1)
+
+#Test error rate
+algae.med.test = algae.med [-train,]
+algae.med.test
+a12.test = algae.med.test$a1
+a12.pred = predict(tree.algae.med, algae.med.test)
+a12.pred
+error12 = table(a12.pred, a12.test)
+error12
+
+sum(diag(error12))/sum(error12)
+1-sum(diag(error12))/sum(error12)
+
+```
+The training error rate went down to 86.25% and the test error rate went up to 90% as the seed increased our training error rate went down however the test error rate went up. It might be because the increase in the seed causes it to become more random. 
+
+###5a)
+```{r}
+set.seed(1)
+x<- cut((1:nrow(algae)), breaks=5, labels= FALSE)
+sample(x)
+```
+
+###5b
+```{r}
+do.chunk <- function(chunkid, chunkdef, algae.med){ # function argument
+train = (chunkdef != chunkid)
+Xtr = algae.med[train,1:11] # get training set
+Ytr = algae.med [train,12] # get true response values in trainig set
+Xvl = algae.med [!train,1:11] # get validation set
+Yvl = algae.med [!train,12] # get true response values in validation set
+lm.a1 <- lm(a1~., data = algae.med [train,1:12])
+predYtr = predict(lm.a1) # predict training values
+predYvl = predict(lm.a1,Xvl) # predict validation values
+data.frame(fold = chunkid,
+train.error = mean((predYtr - Ytr)^2), # compute and store training error
+val.error = mean((predYvl - Yvl)^2)) # compute and store test error
+}
+```
+
+###5c)
+
+```{r}
+
+```
+
+
+
+
+###6a)
+```{r}
+
+# Bootstrap 100 times
+runs <- 1:100
+
+# Lists to save the results
+
+for (i in runs){
+  print(i)
+  sampleIndex <- sample(1:nrow(algae.med), size = nrow(algae.med), replace = TRUE)
+  sampleData <- algae.med[sampleIndex, ]
+  
+}
+
+mu = NULL #mean values of boostrap
+for(draw in 1:100) mu = c(mu,mean(runs[sample(1:100,size=100,replace=T)]))
+
+
+# Bind it into a nice data frame
+algaedata <- cbind(runs, season, size, speed, mxPH, mnO2, Cl, NO3, NH4, oPO4, PO4, Chla, a1, a2, a3, a4, a5, a6, a7)
+algdat <- as.data.frame(algaedata)
+
+algaemodel <- lm(runs ~season+ size+ speed+ mxPH+ mnO2+ Cl+ NO3+ NH4+ oPO4+ PO4+ Chla+ a1+ a2+ a3+ a4+ a5+ a6+ a7, data=algdat)
+summary(algaemodel)
+```

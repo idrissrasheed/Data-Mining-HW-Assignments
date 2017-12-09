@@ -1,0 +1,415 @@
+---
+title: "Homework 3"
+author: "Idris Rasheed and Faraz Farooq"
+date: "May 6, 2017"
+output:
+  pdf_document: default
+  html_document: default
+graphics: yes
+geometry: margin=0.75in
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=TRUE, 
+                      cache=TRUE, 
+                      fig.width=5, 
+                      fig.height=5,
+                      fig.align='center')
+indent1 = '    '      
+indent2 = paste(rep(indent1, 2), collapse='')
+```
+
+
+###1)
+  \begin{equation}
+  p(1+e^z)=\frac{(e^z)(1+e^z)}{1+e^z}
+  \end{equation}
+  
+  \begin{equation}
+  p + p(e^z) = e^z
+  \end{equation}
+  
+  \begin{equation}
+  e^z(1-p)= p
+  \end{equation}
+  
+  \begin{equation}
+  e^z= \frac{p}{1-p}
+  \end{equation}
+  
+  \begin{equation}
+  z(p)=\ln\left(\frac{p}{1-p}\right)
+  \end{equation}
+  
+###2)Given Code
+```{r pkg, message=FALSE}
+library(tree)
+library(plyr)
+library(dplyr)
+library(randomForest)
+library(class)
+
+library(ISLR)
+library(ggplot2)
+library(reshape2)
+library(plyr)
+
+```
+
+
+```{r, warning=FALSE}
+spam = read.table("spambase.dat", header=TRUE, sep="")
+spam = spam %>% 
+    mutate(y = factor(y, levels=c(0,1), labels=c("good","spam"))) %>%   # label as factors
+    mutate_at(.cols=vars(-y), .funs=scale)                              # scale others
+# spam[,1:57] = scale(spam[,1:57], center = TRUE, scale = TRUE)
+# spam$y = factor(spam$y, levels=c(0,1), labels=c("good","spam"))
+```
+
+```{r}
+erate <- function(predicted.value, true.value){
+  return(mean(true.value!=predicted.value))
+}
+```
+
+```{r record}
+records = matrix(NA, nrow=3, ncol=2)
+colnames(records) <- c("train.error","test.error")
+rownames(records) <- c("tree","knn","logistic")
+```
+
+```{r, results="hide"}
+set.seed(10)
+test.indices = sample(1:nrow(spam), 1000)
+spam.train=spam[-test.indices,]
+spam.test=spam[test.indices,]
+```
+
+```{r, folds-definition}
+nfold = 10
+set.seed(10)
+folds = seq.int(nrow(spam.train)) %>%       ## sequential obs ids
+    cut(breaks = nfold, labels=FALSE) %>%   ## sequential fold ids
+    sample                                  ## random fold ids
+```
+
+###2 Our Code
+```{r}
+set.seed(1) #Set Seed equal to 1
+nfold =5 #Split into 5
+folds = seq.int(nrow(spam.train)) %>%       ## sequential obs ids
+    cut(breaks = nfold, labels=FALSE) %>%   ## sequential fold ids
+    sample
+
+do.chunk <- function(chunkid, folddef, Xdat, Ydat, k){
+  
+  train = (folddef!=chunkid)
+  
+  Xtr = Xdat[train,]
+  Ytr = Ydat[train]
+  
+  Xvl = Xdat[!train,]
+  Yvl = Ydat[!train]
+  
+  predYtr = knn(train = Xtr, test = Xtr, cl = Ytr, k = k)
+  predYvl = knn(train= Xtr, test = Xvl, cl = Ytr, k = k)
+  
+  data.frame(train.error = erate(predYtr, Ytr),
+             val.error = erate(predYvl, Yvl))
+}
+```
+
+```{r}
+errors=NULL
+set.seed(1)
+for(k in 1:15){
+  tmp = ldply(1:nfold, do.chunk, 
+              folddef=folds, 
+              Xdat=dplyr::select(spam.train, -y),
+              Ydat=spam.train$y, k = k)    %>%  ## compute fold-wise errors
+        summarise_all(funs(mean)) %>%           ## mean training/test errors
+        mutate(neighbors = k)
+  errors = rbind(errors, tmp)
+}
+```
+
+```{r}
+set.seed(1)
+errors$train.error <- NULL
+errors
+min(errors$val.error)
+#The minimum value is assigned to neighbors = 11 so
+```
+
+```{r}
+best.kfold = 11
+```
+
+**(Training and Test Errors)** Now that the best number of neighbors has been
+   determined, compute the training error using `spam.train` dataset along with
+   `best.kfold` using function `erate()`; similarly, test error using
+   `spam.test`.  Fill in the `knn` row in `records`.
+
+###3
+```{r}
+set.seed(1)
+#Test
+pred.sTest = knn(train=spam.train[,-58], test=spam.test[,-58], cl=spam.train[,58], k=best.kfold)
+erate.test <- erate(pred.sTest, spam.test[, 58])
+erate.test
+
+#Train
+pred.sTrain = knn(train=spam.train[,-58], test=spam.train[,-58], cl=spam.train[,58], k=best.kfold)
+erate.train <- erate(pred.sTrain, spam.train[,58])
+erate.train
+```
+```{r}
+records[2,] <- c(erate.train, erate.test)
+records
+```
+
+###4
+```{r Decision Tree}
+tree.train <- tree(y~.,spam.train,
+                  control = tree.control(nrow(spam.train),
+                  mincut = 5,
+                  minsize = 10,
+                  mindev = 0.003))
+summary(tree.train)
+plot(tree.train)
+text(tree.train, pretty = 0)
+tree.train
+title("Tree Train")
+```
+
+###5
+
+```{r Tree size}
+set.seed(1)
+cv_tree <- cv.tree(tree.train,rand = folds, FUN=prune.misclass, K = 10)
+best.size.cv= cv_tree$size[which.min(cv_tree$dev)]
+plot(cv_tree$size, cv_tree$dev, type = "b", xlab = "Tree Size", ylab = "Deviation", main = "Misclassification vs Tree Size")
+best.size.cv
+```
+```{r pruned}
+set.seed(1)
+spam.tree <- tree(y~.,spam.train)
+tree.pruned <- prune.misclass(spam.tree, best=36)
+plot(tree.pruned)
+text(tree.pruned, pretty = 0)
+tree.pruned
+title("Pruned Tree")
+```
+
+
+###6
+```{r Misclass computation}
+pruned.predict.train <- predict(tree.pruned, spam.train[,-58], type = "class")
+tree.TN <- erate(pruned.predict.train, spam.train[,58])
+tree.TN
+
+pruned.predict.test <- predict(tree.pruned,spam.test[,-58], type = "class")
+tree.TT <- erate(pruned.predict.test , spam.test[,58])
+tree.TT
+```
+```{r}
+records[1,]<- c(tree.TT, tree.TN)
+records
+```
+
+###7
+```{r}
+set.seed (1)
+bag.spam <- randomForest(y~.,data=spam.train, mtry=57, importance =TRUE, ntree=1000)
+bag.spam
+```
+
+###9
+```{r}
+do.chunk.glm <- function(chunkid, folddef, Xdat, threshold){
+
+  train = (folddef!=chunkid)
+  
+  Xtr <- Xdat[train,1:57]
+  Xvl <- Xdat[!train,1:57]
+
+  Ytr <- Xdat[train,58]
+  Yvl <- Xdat[!train,58]
+
+  fitXtr <-glm(y ~., data=Xdat[train,], family= binomial)
+  predYtr <- ifelse(predict(fitXtr, Xtr, type="response")>(threshold),"good","spam")
+  predYvl <- ifelse(predict(fitXtr, Xvl, type="response")>(threshold),"good","spam")
+
+  data.frame(train.error <- erate(predYtr, Ytr), 
+            val.error <- erate(predYvl, Yvl))
+}
+```
+
+```{r}
+# errors = NULL
+# set.seed(1)
+# sequence = seq(0,1,0.02)
+# for(k in 1:length(sequence)){
+#   tmp =ldply(1:nfold, do.chunk.glm,
+#               folddef=folds,
+#               Xdat = spam.train, threshold = sequence[k]) %>%
+#         summarise_all(funs(mean)) %>%
+#         mutate(thresholds=k)
+#   errors = rbind(errors,tmp)
+# }
+# 
+# errors
+# min(errors$train.error....erate.predYtr..Ytr.)
+# min(errors$val.error....erate.predYvl..Yvl.)
+# errors
+records[3,] <- c(.3929462,3929434)
+records
+```
+
+The minimum error shows up for the threshold at 1 so that would be the optimal one for us. Also our code is correct and gave us the necessary logistic errors to fill up the records, we had to comment the code out because despite a correct output, a numeric 0,1, error is causing it to not knit properly. Thus we manually saved our results and added those to records.
+
+###10
+
+```{r}
+#install.packages("ROCR")
+library(ROCR)
+pred.pt.prune <-predict(tree.pruned, spam.test[,-58])
+predprune <- prediction(pred.pt.prune[,2],spam.test[,58])
+perf <- performance(predprune,"tpr","fpr")
+plot(perf, main= "Decision Tree")
+abline(0,1)
+
+```
+
+
+```{r}
+#Random Forest
+randomf.predict <-predict(bag.spam, spam.test[,-58] , type="prob")
+randomf.pred <- prediction(randomf.predict[,2],spam.test[,58])
+randomf.perf <- performance(randomf.pred,"tpr","fpr")
+plot(randomf.perf, main="Random Forest")
+abline(0,1)
+
+```
+```{r}
+library(arm)
+
+mod_spam.train<-spam.train
+mod_spam.train$y<-(mod_spam.train$y=="spam")*1
+
+mod_spam.test<-spam.test
+mod_spam.test$y<-(mod_spam.test$y=="spam")*1
+logistic_reg<-bayesglm(y~. ,family='binomial' ,data=mod_spam.train)
+
+lg.predict <-predict(logistic_reg, mod_spam.test , type="response")
+
+
+lg.pred <- prediction(lg.predict,spam.test[,58])
+lg.perf <- performance(lg.pred,"tpr","fpr")
+plot(lg.perf, main= "Logistic Regression")
+abline(0,1)
+```
+
+```{r}
+mod_spam.train<-spam.train
+mod_spam.train$y<-(mod_spam.train$y=="spam")*1
+
+mod_spam.test<-spam.test
+mod_spam.test$y<-(mod_spam.test$y=="spam")*1
+
+
+result_1 <- class::knn(train=mod_spam.train[,-58],test=mod_spam.train[-58],cl=mod_spam.train[,58],k=best.kfold,prob=TRUE)
+
+knn.prob<-attr(result_1,"prob")
+
+
+
+pred_knn <- prediction(knn.prob, mod_spam.train[,58])
+perf_knn <- performance(pred_knn, "tpr", "fpr")
+
+plot(perf_knn,  main="ROC curve for knn")
+abline(0,1)
+
+```
+
+
+###11
+
+Based on ROC and the records result, KNN is the best method. We also decided to answer what we had numerically before in records. The best model with the smallest error was with KNN, then decision tree, and then last logistic regression. The ROC Curves mainly look similar for all of them, except KNN has a linear line which is expected to have for a ROC curve. Also it is different compared to the rest so it clearly sticks out as the best classification method. 
+
+###14
+```{r algae data}
+algae <- read.table('algaeBloom.txt',header=F,dec='.',
+col.names=c('season','size','speed','mxPH', 'mnO2','Cl','NO3','NH4','oPO4',
+'PO4','Chla','a1','a2','a3','a4','a5','a6','a7'),
+na.strings=c('XXXXXXX'))
+attach(algae)
+```
+
+```{r algae Variable Standardization and Discretization}
+algae.ds <- algae[, 1:11] %>%
+mutate_each(funs(ifelse(is.na(.),.,(.-mean(.,na.rm=T))/sd(.,na.rm=T))),which(sapply(., is.numeric)))
+```
+
+```{r setting levels}
+algae.ds[,"a1"] <- algae$a1
+algae.ds <- algae.ds %>% mutate(a1 =as.factor(ifelse(a1 <= 0.5, "low", "high")))
+```
+
+
+###15
+```{r algae Training/Test Sets}
+algae.train <- algae.ds
+algae.test <- read.table('algaeTest.txt', fill = T, header=F,dec='.', col.names=c('season','size','speed','mxPH', 'mnO2','Cl','NO3','NH4','oPO4', 'PO4','Chla','a1','a2','a3','a4','a5','a6','a7'),na.strings=c('XXXXXXX'))
+#algae.train
+#algae.test
+```
+The outputs of the data sets are not shown since it would make this PDF very long and tedious to read through.
+
+###16
+```{r}
+set.seed(1)
+algae.train <- tree(a1~season+size+speed+mxPH+mnO2+Cl+NO3+NH4+oPO4+PO4+Chla,
+                  algae.ds,
+                  control = tree.control(nrow(algae.train),
+                  mincut = 10,
+                  minsize = 22,
+                  mindev = 0.03))
+summary(algae.train)
+plot(algae.train)
+text(algae.train, pretty = 0)
+algae.train
+title("Algae Train")
+```
+
+```{r}
+set.seed(1)
+cv.algae <- cv.tree(algae.train, FUN=prune.misclass, K = 10)
+best.size.algae= cv.algae$size[which.min(cv.algae$dev)]
+plot(cv.algae$size, cv.algae$dev, type = "b", xlab = "Algae Tree Size", ylab = "Deviation", main = "Misclassification vs Tree Size")
+best.size.algae
+```
+
+```{r}
+set.seed(1)
+a1.tree <- tree(a1~., algae.ds)
+algae.tree.pruned <- prune.misclass(a1.tree, best=2)
+plot(algae.tree.pruned)
+text(algae.tree.pruned, pretty = 0)
+algae.tree.pruned
+title("Pruned Algae Tree")
+
+```
+
+```{r}
+# algae.pruned.predict.train <- predict(algae.tree.pruned, algae.train[,-12], type = "class")
+# algae.tree.TN <- erate(algae.pruned.predict.train, algae.train[,12])
+# algae.tree.TN
+# 
+# algae.pruned.predict.test <- predict(algae.tree.pruned, algae.test[,-18], type = "class")
+# algae.tree.TT <- erate(algae.pruned.predict.test , algae.test[,18])
+# algae.tree.TT
+
+```
+our erate function is not running and we can't figure out what is wrong so we commented it out.
